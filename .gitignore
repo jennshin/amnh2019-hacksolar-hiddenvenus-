@@ -4,3 +4,4 @@ sample-data/
 sample-image.png
 .venv
 *.pyc
+.DS_Store
