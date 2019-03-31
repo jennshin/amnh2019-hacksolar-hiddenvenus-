@@ -41,35 +41,30 @@ class Node():
     # the recursive treatment.
     @staticmethod
     def _print(tree, prefix="", path=None):
-        #if not isinstance(tree, Node):
-            #return str(tree)
         real_path = ['/'] if path is None else path
-        try: 
-            inside = tree.value
-            new_prefix = prefix + '\t'
-            tree_text = ''
-            tree_text += f'{prefix}{repr(tree)}: {tree._debug_info}\n'
-            if isinstance(inside, dict) and tree._ismrecord:
-                for k, v in inside.items():
-                    tree_text += f'{prefix}{k}\n'
-                    tree_text += Node._print(v, new_prefix, real_path + [k]) + "\n"
-            elif isinstance(inside, list) and tree._ismrecord:
-                for i in range(len(inside)):
-                    tree_text += f'{prefix}{i}\n'
-                    tree_text += Node._print(inside[i], new_prefix, real_path + [i]) + "\n"
-            else:
-                tree_text += f'{prefix}{inside}'
+        inside = tree.value
+        new_prefix = prefix + '\t'
+        tree_text = ''
+        tree_text += f'{prefix}{repr(tree)}: {tree._debug_info}\n'
+        if isinstance(inside, dict) and tree._ismrecord:
+            for k, v in inside.items():
+                tree_text += f'{prefix}{k}\n'
+                tree_text += Node._print(v, new_prefix, real_path + [k]) + "\n"
+        elif isinstance(inside, list) and tree._ismrecord:
+            for i in range(len(inside)):
+                tree_text += f'{prefix}{i}\n'
+                tree_text += Node._print(inside[i], new_prefix, real_path + [i]) + "\n"
+        else:
+            tree_text += f'{prefix}{inside}'
 
-            return tree_text
-        except Exception as e: 
-            print(f'Offending node: "{real_path}"')
-            raise e
+        return tree_text
 
     def __str__(self):
         return self._print(self)
 
 
-# TODO: Memoize the basic record functions. saves memory. 
+# TODO: Memoize the basic record functions. saves memory. The
+# initializers, that is.
 class RecordTypes:
     class Integer:
         """Binary record for little endian integers of fixed length."""
@@ -164,12 +159,18 @@ class RecordTypes:
     @staticmethod
     def _fraction_from_bits(*bits):
         accum = 0
-        # power should end in -1.
-        # if there's one bit, then power starts at -1 and ends at -1.
-        # if there's two bits, then power starts at -1, and ends at
-        # -2.
-        # if there's n bits, then power starts at -1 and ends at -n.
-        power = -len(bits)
+        # Sources:
+        # <https://sixlettervariable.blogspot.com/2007/05/vax-floating-point-numbers.html>
+        # <https://nssdc.gsfc.nasa.gov/nssdc/formats/VAXFloatingPoint.htm>
+        # BIDR Document
+        # The MSB should have place value 2^(-2) (2^0, and 2^(-1) are
+        # implicit).
+        # power should end in -2.
+        # if there's one bit, then power starts at -2 and ends at -2.
+        # if there's two bits, then power starts at -2, and ends at
+        # -3.
+        # if there's n bits, then power starts at -2 and ends at -(n + 1).
+        power = -len(bits) - 1
 
         # NOTE: The order of accumulation is important. Starting from
         # small amounts reduces possibility of rounding errors.
@@ -181,13 +182,15 @@ class RecordTypes:
             accum = accum + bit * 2 ** power
             power = power + 1
 
-        return 1.0 + accum
+        return 0.1 + accum
 
     # NOTE: These are not IEEE 754 floating point numbers. Their
     # format is different, as is the bias on the exponent (-128,
     # instead of IEEE 754's -127).
     # TODO: See if you can just write the mantissa bits to memory in
     # correct arrangement, rather than perform arithmetic.
+    # TODO: Rename of VAXFloat.
+    # TODO: Consider 
     class Float:
         """Binary record for floating point numbers in NASA's format,
         which are not IEEE 754 floating point numbers."""
@@ -199,15 +202,29 @@ class RecordTypes:
             else:
                 raise ValueError
 
-        def __call__(self, source, **kwargs):
+        # Could be a bit of a bottleneck of speed if a file has tons
+        # of VAX floats. Slow parts:
+        # - Creating a bit array.
+        # - Creating the fraction. This should be hands-down slowest
+        #   part. Rearranging lists, copies, a loop.
+        # - Calculating sign. This shouldn't be very expensive as
+        #   compared to getting the fraction value. That should be so
+        #   much more expensive.
+        def __call__(self, source, **kwargs): 
             bits = RecordTypes._bytes_to_bits(source[:self.length])
             exponent = RecordTypes._bytes_from_bits(*bits[7:15])
             if exponent == 0:
                 return float(0), source[self.length:]
 
             exponent = exponent - 128
+            # If necessary an optimization is:
+            # sign = 1 - 2 * bit
             sign = 1 if bits[15] == 0 else -1
-            fraction = RecordTypes._fraction_from_bits(*bits[16:], *bits[:7])
+
+            # Using this line with 32-bit floats is harmless, because
+            # there will be no bits from the first two lists.
+            fraction = RecordTypes._fraction_from_bits(
+                    *bits[48:], *bits[32:48], *bits[16:32], *bits[:7])
             value = sign * fraction * 2 ** exponent
             return value, source[self.length:]
 
@@ -269,9 +286,13 @@ class RecordTypes:
         def __call__(self, source, root_record=None):
             return process_meta_record(source, self)
 
+    # NOTE: THe common idiom of creating lists from a multiplied list
+    # of records isn't too harsh on memory. It doesn't deep copy those
+    # records, it's all shallow copies.
     class List:
-        """A series of unnamed records. Pass in a list of record
-        functions. They will be interpreted one after the other.
+        """Metarecord. A series of unnamed records. Pass in a list of
+        record functions. They will be interpreted one after the
+        other.
 
         For a series of records that are named as one group rather than
         indidivually. For example, the radiometer data annotation labels
@@ -304,10 +325,11 @@ def tree_to_values(tree):
     # anything.
     return inside
 
-# source is a memoryview of a bytes object.
 # TODO: Add an optional start value. Would go a long way toward
 # intelligble debug info for custom record functions that use
 # process_meta_record internally.
+# TODO: Give meta records starts and ends, too, based on the start of
+# their first child and end of their last child.
 def process_meta_record(source, meta_record):
     """
     Uses a meta-record to interpret a source of bytes. Behaves
@@ -382,3 +404,45 @@ def process_meta_record(source, meta_record):
 
     return root, remaining_source
 
+# TODO:
+# - Create an Ignore metarecord. Can take length or a record function.
+#   The length ignores some number of bytes, the record function
+#   processes the record function, but then tosses the value. The tree
+#   structure makes an Ignore metarecord very easy. I can have
+#   tree_to_values get rid of ignore values. Good use case is for
+#   simplified versions of bidr records, where I wanna look at just a
+#   little bit of data and ignore the rest.
+#       - Optimization: For records with known and fixed length,
+#         extract the length and use that instead, rather than using
+#         the record function. If length is not present or is unknown,
+#         then use the record function and toss the result.
+#       - Allow to give a length like an If, using the root_record.
+#         Not sure how to pass that in, though. record function is a
+#         callable, so is this. How to differentiate? This would make
+#         for real simple
+# - Make a metarecord for remaining length of a metarecord, rather
+#   than a reserved name (which is a bit clunky). f-bidr works like
+#   so: the total length of record is bytes so far (after length has
+#   been read in) remaining bytes. example: logical record length is
+#   bytes 12-19. The read-in length gives bytes remaining from byte 20
+#   and on. So if remaining_length were 0, then last byte of record is
+#   19. So the exclusive end is byte after remaining_length field +
+#   remaining_length. (with example, the exclusive end byte of a
+#   logical record with remaining length 0 is byte 20: 20 + 0). Input
+#   should be similar to Ignore metarecord.
+# - Change is_leaf to use _ismrecord. That's really what _ismrecord
+#   records.
+# - Optional: At one point, I wanted a record function to be able to
+#   return multiple values. I can now do that pretty easily with a
+#   metarecord function that wraps around another record function. Or,
+#   I could handle it seamlessly at the record function itself. If the
+#   record function returns a tuple of values (and remaining source,
+#   so ( (), src ), then I could attach the tuple of values as more
+#   children to the same parent. Could be name value pairs, too. I've
+#   got options. Writing everything in one loop gives me a lot of
+#   flexibility, as does separating metarecords from records. I could
+#   combine the two, so that I've got a way of differentiating between
+#   a value that's a tuple (plain record function) and a tuple of
+#   values (trying to return several values).
+# - Consider lazy-loading for all known-length records. That would
+#   reduce some waiting.
