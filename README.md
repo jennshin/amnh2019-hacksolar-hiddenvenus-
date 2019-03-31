@@ -1,16 +1,13 @@
 ## Lotta Research
 
-### Adressing [The Hidden Face of Venus](https://github.com/amnh/HackTheSolarSystem/wiki/The-Hidden-Face-of-Venus)
+### Adressing [The Hidden Face of
+Venus](https://github.com/amnh/HackTheSolarSystem/wiki/The-Hidden-Face-of-Venus)
 
 ### Created By Team Team
 
-- Jennifer Shin <https://github.com/jennshin>
+- Jennifer Shin
 - Adam Ibrahim <https://github.com/beelzebielsk>
 
-We're working on reading in the binary data from the magellan mission
-(complete) and interpreting it as grayscale images (WIP). At the same
-time, we'll be taking a look at the Ames Stereo Pipeline to see how
-we'd work with it.k
 For the moment there's just a presentation, and the presentation is
 fairly soft. We got as far as wading through a sea of information,
 much of it quite old, not all of it relevant. Summarizing that was
@@ -22,12 +19,10 @@ the haze of the hackathon and nonsleep.
 ### Solution Description
 
 We did not reach a solution, yet. There's a lot of research yet to be
-done. Most of the work in the repository is dedicated to reading the
-Magellan Mission Data.
-
-The file `example.py` is a demo of the F-BIDR file reading work, and
-can extract a grayscale image from Magellan Mission data, if some is
-placed in the repostiory root directory.
+done. Toward the end of the Hackathon, we were considering using
+mosiacked Magellan data, in part because the mosaics were already
+made, and trying to figure out how to get these mosaics to work with
+the Ames Stereo Pipeline.
 
 # Progress
 
@@ -52,8 +47,8 @@ surface, though he warned that he's not sure of this.
   image data alone, plus other stuff, and there's around ~6000 F-BIDR,
   meaning at least 600GB in data, possibly up to around 1TB. Total,
   all files, all F-BIDRs. I think I can see why there was so much
-  writing involved. This was big data by today's standards, and they
-  did it back in the 90s.
+  writing involved. This was big data by today's standards, back in
+  the 90s.
 - BIDR Data files: longer descriptions of each F-BIDR file.
 - Applicable Documents: References. References to other documents
   refer to here.
@@ -219,3 +214,14 @@ The next 8-bit integer is the data class:
 
 `0x42` = 66, which represents image data in oblique sinusoidal
 projection.
+
+Questions
+=========
+
+- What does the recorded image data actually mean? How do I interpret
+  it? Each pixel of a BIDR image is an 8-bit intensity, but what is
+  that intensity analagous to? In a normal greyscale picture,
+  intensity is analogous to intensity of light. But for the magellan
+  spacecraft's BIDR images, intensity seems to be analogous to the
+  intensity of the radio waves that were reflected back from the
+  surface of Venus. What does this mean?
