@@ -5,7 +5,7 @@ Venus](https://github.com/amnh/HackTheSolarSystem/wiki/The-Hidden-Face-of-Venus)
 
 ### Created By Team Team
 
-- Jennifer Shin
+- Jennifer Shin <https://github.com/jennshin>
 - Adam Ibrahim <https://github.com/beelzebielsk>
 
 For the moment there's just a presentation, and the presentation is
@@ -214,6 +214,16 @@ The next 8-bit integer is the data class:
 
 `0x42` = 66, which represents image data in oblique sinusoidal
 projection.
+
+
+
+Python Requirements 
+=========
+Installation Notes
+
+To install required packages, cd into the folder in terminal and enter:
+pip install -r requirements.txt 
+
 
 Questions
 =========
